@@ -1,7 +1,9 @@
 #include <unistd.h>
+#include <stdio.h>
+
 int main()
 {
-	write(1, "hello from ram\n", 15);
+	printf("hello from ram %ld\n", getpid());
 	sleep(100);
 	write(1, "end of ram\n", 11);
 	return 0;
