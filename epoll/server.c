@@ -117,7 +117,7 @@ void * thread_server(void * args)
                         else if (read > 0)
                         {
                             printf("client %d: %*.*s\n", epoll_return_events[i].data.fd, read, read, receive_buffer);
-//                            char send_buffer[] = "kirekhar injast koja miri";
+//                            char send_buffer[] = "hello";
 //                            printf("server send %ld\n", send(epoll_return_events[i].data.fd, send_buffer, sizeof(send_buffer), 0));
                         }
                     }
