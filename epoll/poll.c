@@ -130,21 +130,21 @@ int main(void)
     address.sin_port = htons(PORT);
     address.sin_addr.s_addr = INADDR_ANY;
 
-//    long arg = fcntl(server_socket, F_GETFL, NULL);
-//    if (arg < 0)
-//    {
-//        fprintf(stderr, "Error fcntl F_GETFL (%s)\n", strerror(errno));
-//        close(server_socket);
-//        return -1;
-//    }
-//
-//    arg |= O_NONBLOCK;
-//    if (fcntl(server_socket, F_SETFL, arg) < 0)
-//    {
-//        fprintf(stderr, "Error fcntl F_SETFL (%s)\n", strerror(errno));
-//        close(server_socket);
-//        return -1;
-//    }
+    long arg = fcntl(server_socket, F_GETFL, NULL);
+    if (arg < 0)
+    {
+        fprintf(stderr, "Error fcntl F_GETFL (%s)\n", strerror(errno));
+        close(server_socket);
+        return -1;
+    }
+
+    arg |= O_NONBLOCK;
+    if (fcntl(server_socket, F_SETFL, arg) < 0)
+    {
+        fprintf(stderr, "Error fcntl F_SETFL (%s)\n", strerror(errno));
+        close(server_socket);
+        return -1;
+    }
 
     if (bind(server_socket, (struct sockaddr*) &address, sizeof(address)) < 0)
     {
@@ -164,21 +164,20 @@ int main(void)
 
     memset(&ctx, 0, sizeof(ctx));
 
-    pthread_create(&thread_accept, NULL, thread_accept_func, &server_socket);
+//    pthread_create(&thread_accept, NULL, thread_accept_func, &server_socket);
 
     int loop = 1;
     while (loop)
     {
         struct pollfd poll_fds[(MAXCLIENTS << 1) + 1];
-//        poll_fds[0].fd = server_socket;
-//        poll_fds[0].events = POLLIN | POLLHUP;
+        int count = 1;
 
-        int count = 0;
+        poll_fds[0].fd = server_socket;
+        poll_fds[0].events = POLLIN | POLLHUP;
         for (int i = 0; i < MAXCLIENTS; ++i)
         {
             if (ctx.clients[i].socket_fd > 0)
             {
-//                ++count;
 //                printf("add %d on %d\n", ctx.clients[i].socket_fd, count);
                 poll_fds[count].fd = ctx.clients[i].socket_fd;
                 poll_fds[count].events = POLLIN | POLLRDHUP | POLLHUP | POLLERR | POLLREMOVE;
@@ -187,7 +186,7 @@ int main(void)
         }
 
         printf("poll ... %d %d\n", count,  ctx.count);
-        int nfd = poll(poll_fds, count, 1000);
+        int nfd = poll(poll_fds, count, -1);
         if (nfd < 0)
         {
             fprintf(stderr, "failed to poll: %d %s\n", errno, strerror(errno));
@@ -224,7 +223,6 @@ int main(void)
                    (revent & POLLHUP) ? "POLLHUP ": "",
                    (revent & POLLNVAL) ? "POLLNVAL ": "");
 
-            /*
             if (fd == server_socket) // server sockets
             {
                 if ((revent & POLLRDHUP) || (revent & POLLHUP))
@@ -270,7 +268,6 @@ int main(void)
                 printf("un handled revent on listener: %X\n", revent);
             }
             else // client sockets
-            */
             {
                 if ((revent & POLLRDHUP) || (revent & POLLHUP))
                 {
@@ -306,7 +303,7 @@ int main(void)
     }
 
 //    pthread_cancel(thread_accept);
-    pthread_kill(thread_accept, SIGKILL);
+//    pthread_kill(thread_accept, SIGKILL);
 
     close(server_socket);
     for (int i = 0; i < ctx.count; ++i)

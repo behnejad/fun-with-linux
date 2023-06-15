@@ -383,6 +383,11 @@ int main(int argc, const char * argv[])
         for (int i = 0; i < state.poll_count; ++i)
         {
             int revent = state.poll[i].revents;
+            if (revent == 0)
+            {
+                continue;
+            }
+
             printf("fd: %d, revent: %X -> %s%s%s%s%s%s%s%s%s%s%s%s%s\n",
                    state.poll[i].fd, revent,
                    (revent & POLLIN) ? "POLLIN ": "",
