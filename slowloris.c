@@ -5,6 +5,7 @@
 #define __USE_GNU
 #define _GNU_SOURCE
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -309,27 +310,32 @@ int main(int argc, const char * argv[])
         {
             if (state.connections[i].connected == 0)
             {
-                state.connections[i].socket_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-                if (state.connections[i].socket_fd < 0)
+                if (state.connections[i].socket_fd <= 0)
                 {
-                    perror("ERROR opening socket\n");
-                    clear_state();
-                    return -1;
-                }
-                else
-                {
-                    if (make_async(state.connections[i].socket_fd) < 0)
+                    int soc = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+                    if (soc < 0)
                     {
+                        perror("ERROR opening socket\n");
                         clear_state();
                         return -1;
                     }
+                    else
+                    {
+                        state.connections[i].socket_fd = soc;
+                        if (make_async(state.connections[i].socket_fd) < 0)
+                        {
+                            clear_state();
+                            return -1;
+                        }
+                    }
                 }
 
-                if (connect(state.connections[i].socket_fd, (struct sockaddr *) &state.serv_addr, sizeof(state.serv_addr)) < 0)
+                int res = connect(state.connections[i].socket_fd, (struct sockaddr *) &state.serv_addr, sizeof(state.serv_addr));
+                if (res < 0)
                 {
                     if (errno != EINPROGRESS)
                     {
-                        fprintf(stderr, "Error fcntl F_SETFL (%s)\n", strerror(errno));
+                        fprintf(stderr, "cannot connect socket(%d) %d (%s)\n", state.connections[i].socket_fd,  errno, strerror(errno));
                         clear_state();
                         return -1;
                     }
@@ -363,13 +369,13 @@ int main(int argc, const char * argv[])
             }
         }
 
-        state.poll_count = poll(state.poll, state.poll_count, state.poll_timeout);
-        if (state.poll_count < 0)
+        int count = poll(state.poll, state.poll_count, state.poll_timeout);
+        if (count < 0)
         {
             fprintf(stderr, "failed to poll: %d %s\n", errno, strerror(errno));
             break;
         }
-        else if (state.poll_count == 0)
+        else if (count == 0)
         {
             continue;
         }
@@ -377,37 +383,37 @@ int main(int argc, const char * argv[])
         for (int i = 0; i < state.poll_count; ++i)
         {
             int revent = state.poll[i].revents;
-            if (state.poll[i].revents != 0)
+            printf("fd: %d, revent: %X -> %s%s%s%s%s%s%s%s%s%s%s%s%s\n",
+                   state.poll[i].fd, revent,
+                   (revent & POLLIN) ? "POLLIN ": "",
+                   (revent & POLLPRI) ? "POLLPRI ": "",
+                   (revent & POLLOUT) ? "POLLOUT ": "",
+                   (revent & POLLRDNORM) ? "POLLRDNORM ": "",
+                   (revent & POLLRDBAND) ? "POLLRDBAND ": "",
+                   (revent & POLLWRNORM) ? "POLLWRNORM ": "",
+                   (revent & POLLWRBAND) ? "POLLWRBAND ": "",
+                   (revent & POLLMSG) ? "POLLMSG ": "",
+                   (revent & POLLREMOVE) ? "POLLREMOVE ": "",
+                   (revent & POLLRDHUP) ? "POLLRDHUP ": "",
+                   (revent & POLLERR) ? "POLLERR ": "",
+                   (revent & POLLHUP) ? "POLLHUP ": "",
+                   (revent & POLLNVAL) ? "POLLNVAL ": "");
+
+            assert(state.connections[state.poll_connection_map[i]].socket_fd == state.poll[i].fd);
+            if ((revent & POLLRDHUP) || (revent & POLLHUP))
             {
-                printf("fd: %d, revent: %X -> %s%s%s%s%s%s%s%s%s%s%s%s%s\n",
-                       state.poll[i].fd, revent,
-                       (revent & POLLIN) ? "POLLIN ": "",
-                       (revent & POLLPRI) ? "POLLPRI ": "",
-                       (revent & POLLOUT) ? "POLLOUT ": "",
-                       (revent & POLLRDNORM) ? "POLLRDNORM ": "",
-                       (revent & POLLRDBAND) ? "POLLRDBAND ": "",
-                       (revent & POLLWRNORM) ? "POLLWRNORM ": "",
-                       (revent & POLLWRBAND) ? "POLLWRBAND ": "",
-                       (revent & POLLMSG) ? "POLLMSG ": "",
-                       (revent & POLLREMOVE) ? "POLLREMOVE ": "",
-                       (revent & POLLRDHUP) ? "POLLRDHUP ": "",
-                       (revent & POLLERR) ? "POLLERR ": "",
-                       (revent & POLLHUP) ? "POLLHUP ": "",
-                       (revent & POLLNVAL) ? "POLLNVAL ": "");
+                int socket_index = state.poll_connection_map[i];
+                printf("socket %d disconnected\n", state.connections[socket_index].socket_fd);
+                shutdown(state.connections[socket_index].socket_fd, SHUT_RDWR);
 
-                if ((revent & POLLRDHUP) || (revent & POLLHUP))
-                {
-                    int socket_index = state.poll_connection_map[i];
-                    printf("socket %d disconnected\n", state.connections[socket_index].socket_fd);
-                    shutdown(state.connections[socket_index].socket_fd, SHUT_RDWR);
-                    close(state.connections[socket_index].socket_fd);
-                    state.connections[socket_index].socket_fd = 0;
-                    state.connections[socket_index].connected = 0;
-                    continue;
-                }
+                close(state.connections[socket_index].socket_fd);
+                state.connections[socket_index].socket_fd = 0;
+                state.connections[socket_index].connected = 0;
+                continue;
+            }
 
-                if (revent & POLLIN)
-                {
+            if ((revent & (POLLIN | POLLOUT)) == (POLLIN | POLLOUT))
+            {
 //                    while (1)
 //                    {
 //                        int r = recv(state.poll[i].fd, buffer, sizeof(buffer), 0);
@@ -416,17 +422,16 @@ int main(int argc, const char * argv[])
 //                            break;
 //                        }
 //                    }
-                    while (recv(state.poll[i].fd, buffer, sizeof(buffer), 0) > 0);
-                }
+                while (recv(state.poll[i].fd, buffer, sizeof(buffer), 0) > 0);
+            }
 
-                if (revent & POLLOUT)
-                {
-                    int value = 1;
-                    struct linger linger = {.l_onoff = 0, .l_linger = 0};
-                    state.connections[state.poll_connection_map[i]].connected = 2;
-                    setsockopt(state.poll[i].fd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value));
-                    setsockopt(state.poll[i].fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
-                }
+            if (revent & POLLOUT)
+            {
+                int value = 1;
+                struct linger linger = {.l_onoff = 0, .l_linger = 0};
+                state.connections[state.poll_connection_map[i]].connected = 2;
+                setsockopt(state.poll[i].fd, SOL_SOCKET, SO_KEEPALIVE, &value, sizeof(value));
+                setsockopt(state.poll[i].fd, SOL_SOCKET, SO_LINGER, &linger, sizeof(linger));
             }
         }
 
