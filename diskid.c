@@ -3,6 +3,15 @@
 #define IDENT_POSITION 0x1B8
 #define IDENT_LENGTH 4 
 
+/*
+4,194,304
+b
+/dev/sdb1        8192 7774207 7766016  3.7G  b W95 FAT32
+sfdisk -l /dev/sdb
+mkdosfs -i 989D6190 /dev/sdb1
+ch.c
+*/
+
 void readDiskIdentifier(FILE* fp)
 {
         fseek(fp, IDENT_LENGTH - 1 + IDENT_POSITION, SEEK_SET);
