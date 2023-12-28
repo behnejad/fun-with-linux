@@ -87,6 +87,17 @@ concept TinyType = requires(T a, T b)
 	{a + b} noexcept -> std::convertible_to<int>; // compond requirement
 };
 
+template <typename T>
+T add_number9(T a, T b) requires std::integral<T> || std::floating_point<T> 
+{
+	return a + b;
+}
+
+template <typename T>
+T add_number10(T a, T b) requires std::floating_point<T> && requires (T t) {sizeof(T) <= 4; requires sizeof(T) <= 4;}
+{
+	return a + b;
+}
 
 // template override - does not work :'(
 // template <>
@@ -96,15 +107,24 @@ concept TinyType = requires(T a, T b)
 // 	return x + y;
 // }
 
+std::integral auto add(std::integral auto x, std::integral auto y)
+{
+	return x + y;
+}
+
 int main()
 {
+	std::integral auto x = add(10, 20);
+	std::floating_point auto y = 7.7;
+
 	// print_number1(30.2);
 	// std::cout << add_number1(1.0, 4.2) << std::endl;
 	// std::cout << add_number2(1.0, 4.2) << std::endl;
 	// std::cout << add_number3(1.0, 4.2) << std::endl;
 	// std::cout << add_number4(1.0, 4.2) << std::endl;
 	// std::cout << add_number5(1.0, 4.2) << std::endl;
-
+	// std::cout << add_number9(1, 4) << std::endl;
+	// std::cout << add_number10(2.0, 4.2) << std::endl;
 
 	return 0;
 }
